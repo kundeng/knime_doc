@@ -1,0 +1,2820 @@
+![Logo](https://knime-python.readthedocs.io/en/stable/_static/KNIME_Logo.png)
+  * Python Script API
+    * Inputs and outputs
+    * Classes
+    * Views
+    * Utility functions
+  * Python Extension Development (Labs)
+    * Nodes
+      * Decorators
+        * Port Decorators
+        * Port Group Decorators
+      * Parameters
+        * Validation
+        * Parameter Visibility Rules
+        * Parameter Groups
+    * Tables
+      * Data Types
+    * Views
+    * Port Objects
+      * Port Object Specs
+      * Custom Port Object Types
+    * Environment Variables
+  * Deprecated Python Script API
+    * Inputs and outputs
+    * Factory methods
+    * Classes
+  * License
+
+
+KNIME Python API
+  *   * Python Extension Development (Labs)
+  * View page source
+
+
+# Python Extension Development (Labs)
+These classes can be used by developers to implement their own Python nodes for KNIME. For a more detailed description see the Pure Python Node Extensions Guide
+Note
+Before KNIME AP 4.7, the module used to access KNIME functionality was called `knime_extension`. This module has been renamed to `knime.extension`.
+## Nodes 
+
+_class_ knime.extension.PythonNode
+    
+Extend this class to provide a pure Python based node extension to KNIME Analytics Platform.
+Users can either use the decorators `@knext.input_table`, `@knext.input_binary`, `@knext.output_table`, `@knext.output_binary`, and `@knext.output_view`, or populate the `input_ports`, `output_ports`, and `output_view` attributes.
+Use the Python logging facilities and its `.warning` and `.error` methods to write warnings and errors to the KNIME console. `.info` and `.debug` will only show up in the KNIME console if the log level in KNIME is configured to show these.
+Examples
+```
+>>> import logging
+... import knime.extension as knext
+...
+... LOGGER = logging.getLogger(__name__)
+...
+... category = knext.category("/community", "mycategory", "My Category", "My category described", icon="icons/category.png")
+...
+... @knext.node(name="Pure Python Node", node_type=knext.NodeType.LEARNER, icon_path="icons/icon.png", category=category)
+... @knext.input_table(name="Input Data", description="We read data from here")
+... @knext.output_table(name="Output Data", description="Whatever the node has produced")
+... class TemplateNode(knext.PythonNode):
+...   # A Python node has a description.
+...
+...   def configure(self, configure_context, table_schema):
+...     LOGGER.info(f"Configuring node")
+...     return table_schema
+...
+...   def execute(self, exec_context, table):
+...     return table
+
+```
+
+
+_abstract_ configure(_config_context :ConfigurationContext_, _* inputs_)
+    
+Configure this Python node. 
+
+Parameters:
+    
+  * **config_context** (_ConfigurationContext_) – The ConfigurationContext providing KNIME utilities during execution
+  * ***inputs** – Each input table spec or binary port spec will be added as parameter, in the same order that the ports were defined.
+
+
+
+Returns:
+    
+Either a single spec, or a tuple or list of specs. The number of specs must match the number of defined output ports, and they must be returned in this order. Alternatively, instead of a spec, a knext.Column can be returned (if the spec shall only consist of one column). 
+
+Return type:
+    
+Union[Spec, List[Spec], Tuple[Spec, …], Column] 
+
+Raises:
+    
+**InvalidParametersError** – If the current input parameters do not satisfy this node’s requirements. 
+
+_abstract_ execute(_exec_context :ExecutionContext_, _* inputs_)
+    
+Execute this Python node. 
+
+Parameters:
+    
+  * **exec_context** (_ExecutionContext_) – The ExecutionContext providing KNIME utilities during execution.
+  * ***inputs** (_tuple_) – Each input table or binary port object will be added as a parameter, in the same order that the ports were defined. Tables will be provided as a kn.Table, while binary data will be a plain Python bytes object.
+
+
+
+Returns:
+    
+Either a single output object (table or binary), or a tuple or list of objects. The number of output objects must match the number of defined output ports, and they must be returned in this order. Tables must be provided as a kn.Table or kn.BatchOutputTable, while binary data should be returned as plain Python bytes object. 
+
+Return type:
+    
+object or tuple/list of objects
+A node is part of a category: 
+
+knime.extension.category(_path :str_, _level_id :str_, _name :str_, _description :str_, _icon :str_, _after :str=''_, _locked :bool=True_)
+    
+Register a new node category.
+A node category must be created only once. Use the string that represents the absolute category path to add nodes to an existing category.
+Examples
+```
+>>> node_category = knext.category(
+...   "/testing", "python-nodes", "Python Nodes", "Python testing nodes", "icon.png"
+... )
+...
+... @knext.node(
+...   name="Simple Python Node",
+...   node_type=knext.NodeType.MANIPULATOR,
+...   icon_path="icon.png",
+...   category=node_category
+... )
+... class SimpleNode(knext.PythonNode):
+...   pass
+
+```
+
+
+Parameters:
+    
+  * **path** (_str_) – The absolute path that leads to this category, e.g., “/io/read”. The segments are the category level-IDs, separated by a slash (“/”). Categories that contain community nodes should be placed in the “/community” category.
+  * **level_id** (_str_) – The identifier of the level which is used as a path-segment and must be unique at the level specified by “path”.
+  * **name** (_str_) – The name of this category, e.g., “File readers”.
+  * **description** (_str_) – A short description of the category.
+  * **icon** (_str_) – File path to a 16x16 pixel PNG icon for this category. The path must be relative to the root of the extension.
+  * **after** (_str_ _,__optional_) – Specifies the level-id of the category after which this category should be sorted. Defaults to “”.
+  * **locked** (_bool_ _,__optional_) – Set this to False to allow extensions from other vendors to add sub-categories or nodes to this category. Defaults to True.
+
+
+
+Returns:
+    
+The full path of the category, which can be used to create nodes inside this category. 
+
+Return type:
+    
+str
+A node has a type: 
+
+_class_ knime.extension.NodeType(_value_)
+    
+Defines the different node types that are available for Python based nodes. 
+
+LEARNER _= 'Learner'_
+    
+A node learning a model that is typically consumed by a PREDICTOR. 
+
+MANIPULATOR _= 'Manipulator'_
+    
+A node that manipulates data. 
+
+OTHER _= 'Other'_
+    
+A node that doesn’t fit one of the other node types. 
+
+PREDICTOR _= 'Predictor'_
+    
+A node that predicts something typically using a model provided by a LEARNER. 
+
+SINK _= 'Sink'_
+    
+A node consuming data. 
+
+SOURCE _= 'Source'_
+    
+A node producing data. 
+
+VISUALIZER _= 'Visualizer'_
+    
+A node that visualizes data.
+A node’s configure method receives a configuration context that lets you interact with KNIME 
+
+_class_ knime.extension.ConfigurationContext(_java_ctx_ , _flow_variables_ , _input_ports =None_, _output_ports =None_)
+    
+The ConfigurationContext provides utilities to communicate with KNIME during a node’s configure() method. 
+
+_property_ flow_variables _: Dict[str,Any]_
+    
+The flow variables coming in from KNIME as a dictionary with string keys.
+Notes
+The dictionary can be edited and supports flow variables of the following types:
+  * bool
+  * list[bool]
+  * float
+  * list[float]
+  * int
+  * list[int]
+  * str
+  * list[str]
+
+
+
+get_connected_input_port_numbers() → List[int]
+    
+Gets the number of connected input ports for each port.
+This method can be used to know how many input ports are connected to the node for each port. 
+
+Returns:
+    
+A list of the number of connected input ports for each port type. 
+
+Return type:
+    
+list of int 
+
+get_connected_output_port_numbers() → List[int]
+    
+Gets the number of connected output ports for each port.
+This method can be used to know how many output ports are connected to the node for each port. This is relevant when using PortGroups to determine which ports have to be populated with data.
+Examples
+```
+>>> @node(name="Example Node with Group Ports")
+... @input_table(name="Input Data", description="The data to process in my node")
+... @output_table_group(name="Output Data", description="Multiple outputs from my node")
+... class ExampleNode(PythonNode):
+...   # ...
+...   def execute(self, exec_context, table)->List[knext.Schema]:
+...     output_table = table
+...     connected_output_ports = exec_context.get_connected_output_port_numbers()
+...     # When 2 output ports are connected, this will return [2].
+...     output_tables = [output_table] * connected_output_ports[0]
+...     return output_tables # Thus, one list with two tables has to be returned.
+
+```
+
+
+Returns:
+    
+A list of the number of connected output ports for each port type. 
+
+Return type:
+    
+list of int 
+
+get_credential_names()
+    
+Returns the identifier (flow variable name) for each credential. 
+
+Returns:
+    
+A list of credential names. 
+
+Return type:
+    
+list 
+
+get_credentials(_identifier :str_) → Credential
+    
+Returns the credentials dataclass for the given identifier. 
+
+Parameters:
+    
+**identifier** (_str_) – The identifier of the credentials to retrieve. 
+
+Returns:
+    
+A dataclass containing the credentials. 
+
+Return type:
+    
+Credential 
+
+set_warning(_message :str_) → None
+    
+Sets a warning on the node. 
+
+Parameters:
+    
+**message** (_str_) – The warning message to display on the node.
+A node’s execute method receives an execution context that lets you interact with KNIME and e.g. check whether the user has cancelled the execution of your Python node. 
+
+_class_ knime.extension.ExecutionContext(_java_ctx_ , _flow_variables_ , _input_ports =None_, _output_ports =None_)
+    
+The ExecutionContext provides utilities to communicate with KNIME during a node’s execute() method. 
+
+_property_ flow_variables _: Dict[str,Any]_
+    
+The flow variables coming in from KNIME as a dictionary with string keys.
+Notes
+The dictionary can be edited and supports flow variables of the following types:
+  * bool
+  * list[bool]
+  * float
+  * list[float]
+  * int
+  * list[int]
+  * str
+  * list[str]
+
+
+
+get_connected_input_port_numbers() → List[int]
+    
+Gets the number of connected input ports for each port.
+This method can be used to know how many input ports are connected to the node for each port. 
+
+Returns:
+    
+A list of the number of connected input ports for each port type. 
+
+Return type:
+    
+list of int 
+
+get_connected_output_port_numbers() → List[int]
+    
+Gets the number of connected output ports for each port.
+This method can be used to know how many output ports are connected to the node for each port. This is relevant when using PortGroups to determine which ports have to be populated with data.
+Examples
+```
+>>> @node(name="Example Node with Group Ports")
+... @input_table(name="Input Data", description="The data to process in my node")
+... @output_table_group(name="Output Data", description="Multiple outputs from my node")
+... class ExampleNode(PythonNode):
+...   # ...
+...   def execute(self, exec_context, table)->List[knext.Schema]:
+...     output_table = table
+...     connected_output_ports = exec_context.get_connected_output_port_numbers()
+...     # When 2 output ports are connected, this will return [2].
+...     output_tables = [output_table] * connected_output_ports[0]
+...     return output_tables # Thus, one list with two tables has to be returned.
+
+```
+
+
+Returns:
+    
+A list of the number of connected output ports for each port type. 
+
+Return type:
+    
+list of int 
+
+get_credential_names()
+    
+Returns the identifier (flow variable name) for each credential. 
+
+Returns:
+    
+A list of credential names. 
+
+Return type:
+    
+list 
+
+get_credentials(_identifier :str_) → Credential
+    
+Returns the credentials dataclass for the given identifier. 
+
+Parameters:
+    
+**identifier** (_str_) – The identifier of the credentials to retrieve. 
+
+Returns:
+    
+A dataclass containing the credentials. 
+
+Return type:
+    
+Credential 
+
+get_knime_home_dir() → str
+    
+Returns the local absolute path to the directory in which KNIME stores its configuration as well as log files. 
+
+Returns:
+    
+The local absolute path to the KNIME directory. 
+
+Return type:
+    
+str 
+
+get_workflow_data_area_dir() → str
+    
+Returns the local absolute path to the current workflow’s data area folder. This folder is meant to be part of the workflow, so its contents are included whenever the workflow is shared. 
+
+get_workflow_temp_dir() → str
+    
+Returns the local absolute path where temporary files for this workflow should be stored. Files created in this folder are not automatically deleted by KNIME.
+By default, this folder is located in the operating system’s temporary folder. In that case, the contents will be cleaned by the OS. 
+
+is_canceled() → bool
+    
+Returns true if this node’s execution has been canceled from KNIME. Nodes can check for this property and return early if the execution does not need to finish. Raising a RuntimeError in that case is encouraged. 
+
+set_progress(_progress :float_, _message :str|None=None_)
+    
+Set the progress of the execution.
+Note that the progress that can be set here is 80% of the total progress of a node execution. The first and last 10% are reserved for data transfer and will be set by the framework. 
+
+Parameters:
+    
+  * **progress** (_float_) – A floating point number between 0.0 and 1.0.
+  * **message** (_str_ _,__optional_) – An optional message to display in KNIME with the progress.
+
+
+
+set_warning(_message :str_) → None
+    
+Sets a warning on the node. 
+
+Parameters:
+    
+**message** (_str_) – The warning message to display on the node.
+The dialog creation context is used to create dialogs for the configuration of the node. It can be accessed indirectly, by passing its method’s as arguments to specific parameters (see the example below). 
+
+_class_ knime.extension.DialogCreationContext(_java_ctx_ , _flow_variables_ , _specs_to_python_converter_)
+    
+The DialogCreationContext provides utilities to communicate with KNIME during the dialog creation phase. It enables access to the flow variables, the specs of the input tables and the credentials. These can be used to create the dialog elements, by passing the respective method as lambda function to the constructor of the string parameter class. The lambdas will receive the dialog creation context as parameter which should be passed as first parameter to the fully qualified method calls of DialogCreationContext as below:
+Examples
+```
+>>> class ExampleNode:
+...   # This dialog element displays a dropdown with all available credentials
+...   string_param = knext.StringParameter(label="Credential parameter", description="Choices is a callable",
+...                 choices=lambda a: knext.DialogCreationContext.get_credential_names(a))
+
+```
+
+
+_property_ flow_variables _: Dict[str,Any]_
+    
+The flow variables coming in from KNIME as a dictionary with string keys.
+Notes
+The dictionary can be edited and supports flow variables of the following types:
+  * bool
+  * list[bool]
+  * float
+  * list[float]
+  * int
+  * list[int]
+  * str
+  * list[str]
+
+
+
+get_credential_names()
+    
+Returns the identifier (flow variable name) for each credential. 
+
+Returns:
+    
+A list of credential names. 
+
+Return type:
+    
+list 
+
+get_credentials(_identifier :str_) → Credential
+    
+Returns the credentials dataclass for the given identifier. 
+
+Parameters:
+    
+**identifier** (_str_) – The identifier of the credentials to retrieve. 
+
+Returns:
+    
+A dataclass containing the credentials. 
+
+Return type:
+    
+Credential 
+
+get_flow_variables()
+    
+Returns the flow variables coming in from KNIME as a dictionary with string keys. The dictionary cannot be edited. 
+
+Returns:
+    
+The flow variables dictionary with string keys. 
+
+Return type:
+    
+dict
+Notes
+The supported flow variable types are: - bool - list(bool) - float - list(float) - int - list(int) - str - list(str) 
+
+get_input_specs() → List[PortObjectSpec]
+    
+Returns the specs for all input ports of the node. 
+
+Returns:
+    
+A list of specs for all input ports. 
+
+Return type:
+    
+List
+### Decorators
+These decorators can be used to easily configure your Python node. 
+
+knime.extension.node(_name :str_, _node_type :NodeType_, _icon_path :str_, _category :str_, _after :str|None=None_, _keywords :List[str]|None=None_, _id :str|None=None_, _is_deprecated :bool=False_, _is_hidden :bool=False_) → Callable
+    
+Use this decorator to annotate a PythonNode class or function that creates a PythonNode instance that should correspond to a node in KNIME. 
+
+Parameters:
+    
+  * **name** (_str_) – The name of the node
+  * **node_type** (_NodeType_) – Type can be Source, Sink, Learner, Predictor, Manipulator, Visualizer or Other.
+  * **icon_path** (_str_) – String to icon if no path is given it has no icon.
+  * **category** (_str_) – Category to which the node will belongs to. The node will appear under this category. E.g. community.
+  * **after** (_Optional_ _[__str_ _]_) – If given the node will be listed after the specified node.
+  * **keywords** (_Optional_ _[__List_ _[__str_ _]__]_) – Keywords describing your node which will help finding the node during search.
+  * **id** (_str_) – Id of your node.
+  * **is_deprecated** (_bool_) – Default is false.
+  * **is_hidden** (_bool_) – Default is false. If true your node will not shown during search and not be listed in it’s category.
+
+
+
+Returns:
+    
+Returns a function which will decorate your node implementation with the set parameters. 
+
+Return type:
+    
+Callable
+#### Port Decorators
+Port decorators in the KNIME Python extension allow you to define input and output ports for your nodes. Each port is of a specific type, such as “Table” or “Binary”, and is used for nodes that require a fixed number of inputs or outputs. We recommend using unique and descriptive names for each port. 
+
+knime.extension.input_table(_name :str_, _description :str_, _optional :bool|None=False_)
+    
+Use this decorator to define an input port of type “Table” of a node. 
+
+Parameters:
+    
+  * **name** (_str_) – The name of the input port.
+  * **description** (_str_) – A description of the input port.
+  * **optional** (_bool_) – Whether the port is optional i.e. can be added by the user
+
+
+
+knime.extension.input_binary(_name :str_, _description :str_, _id :str_, _optional :bool|None=False_)
+    
+Use this decorator to define a bytes-serialized port object input of a node. 
+
+Parameters:
+    
+  * **name** (_str_) – The name of the input port.
+  * **description** (_str_) – A description of the input port.
+  * **id** (_str_) – A unique ID identifying the type of the Port. Only Ports with equal ID can be connected in KNIME.
+
+
+
+knime.extension.input_port(_name :str_, _description :str_, _port_type :PortType_, _optional :bool|None=False_)
+    
+Use this decorator to add an input port of the provided type to a node. 
+
+Parameters:
+    
+  * **name** (_str_) – The name of the input port.
+  * **description** (_str_) – A description of the input port.
+  * **port_type** (_PortType_) – The type of the input port.
+  * **optional** (_bool_) – Whether the port is optional i.e. can be added by the user
+
+
+
+knime.extension.output_table(_name :str_, _description :str_)
+    
+Use this decorator to define an output port of type “Table” of a node. 
+
+Parameters:
+    
+  * **name** (_str_) – The name of the port.
+  * **description** (_str_) – Description of what the port is used for.
+
+
+
+knime.extension.output_image(_name :str_, _description :str_)
+    
+Use this decorator to define an output port of the type “Image” of a node.
+The configure method must return specs of the type ImagePortObjectSpec. The execute method must return a bytes object containing the image data. Note that the image data must be valid for the format defined in configure. 
+
+Parameters:
+    
+  * **name** (_str_) – The name of the image output port
+  * **description** (_str_) – Description of the image output port
+
+
+Examples
+```
+>>> @knext.node(...)
+... @knext.output_image(
+...   name="PNG Output Image",
+...   description="An example PNG output image")
+... @knext.output_image(
+...   name="SVG Output Image",
+...   description="An example SVG output image")
+... class ImageNode:
+...   def configure(self, config_context):
+...     return (
+...       knext.ImagePortObjectSpec(knext.ImageFormat.PNG),
+...       knext.ImagePortObjectSpec(knext.ImageFormat.SVG),
+...     )
+...
+...   def execute(self, exec_context):
+...     # create a plot ...
+...     buffer_png = io.BytesIO()
+...     plt.savefig(buffer_png, format="png")
+...
+...     buffer_svg = io.BytesIO()
+...     plt.savefig(buffer_svg, format="svg")
+...
+...     return (
+...       buffer_png.getvalue(),
+...       buffer_svg.getvalue(),
+...     )
+
+```
+
+
+knime.extension.output_binary(_name :str_, _description :str_, _id :str_)
+    
+Use this decorator to define a bytes-serialized port object output of a node. 
+
+Parameters:
+    
+  * **name** (_str_) – The name of the port.
+  * **description** (_str_) – The description of the port.
+  * **id** (_str_) – A unique ID identifying the type of the Port. Only Ports with equal ID can be connected in KNIME.
+
+
+
+knime.extension.output_port(_name :str_, _description :str_, _port_type :PortType_)
+    
+Use this decorator to add an output port of the provided type to a node. 
+
+Parameters:
+    
+  * **name** (_str_) – The name of the port.
+  * **description** (_str_) – Description of what the port is used for.
+  * **port_type** (_type_) – The type of the port to add.
+
+
+
+knime.extension.output_view(_name :str_, _description :str_, _static_resources :str|None=None_)
+    
+Use this decorator to specify that this node produces a view. 
+
+Parameters:
+    
+  * **name** (_str_) – The name of the view.
+  * **description** (_str_) – Description of the view.
+  * **static_resources** (_str_) – The path to a folder of resources that will be available to the HTML page. The path given here must be relative to the root of the extension. The resources can be accessed by the same relative file path (e.g. “{static_resources}/{filename}”).
+
+
+#### Port Group Decorators
+The group decorators allow you to define input and output port groups for your nodes. A port group means that you can dynamically add and remove ports in KNIME. 
+
+knime.extension.input_table_group(_name :str_, _description :str_)
+    
+Use this decorator to define an input port group of type “Table” of a node. 
+
+Parameters:
+    
+  * **name** (_str_) – The name of the input port group. Must be unique for all input port groups.
+  * **description** (_str_) – A description of the input port group.
+
+
+Examples
+```
+>>> @knext.node(
+...   name="Example Node with Multiple Input Table Groups",
+...   node_type=knext.NodeType.MANIPULATOR,
+...   icon_path="icon.png",
+...   category="community/example"
+... )
+... @knext.input_table_group(
+...   name="First Input Tables",
+...   description="The first group of input tables for processing"
+... )
+... @knext.input_table_group(
+...   name="Second Input Tables",
+...   description="The second group of input tables for processing"
+... )
+... @knext.output_table_group(
+...   name="Output Tables",
+...   description="Combined results of the input tables"
+... )
+... class ConcatenateNode(knext.PythonNode):
+...   def configure(self, config_context, first_table_specs: List[knext.Schema], second_table_specs: List[knext.Schema]) -> Iterable[List[knext.Schema]]:
+...     return first_table_specs + second_table_specs
+...
+...   def execute(self, exec_context, first_tables: List[knext.Table], second_tables: List[knext.Table]) -> Iterable[List[knext.Table]]:
+...     return first_tables + second_tables
+
+```
+
+
+knime.extension.input_binary_group(_name :str_, _description :str_, _id :str|None=None_)
+    
+Use this decorator to define an input port group of type “Binary” for a node. 
+
+Parameters:
+    
+  * **name** (_str_) – The name of the input port group. Must be unique for all input port groups.
+  * **description** (_str_) – A description of the input port group.
+  * **id** (_Optional_ _[__str_ _]_) – A unique ID identifying the type of the PortGroup. Only PortGroups with equal ID can be connected in KNIME.
+
+
+
+knime.extension.output_table_group(_name :str_, _description :str_)
+    
+Use this decorator to define an output port group of type “Table” of a node. 
+
+Parameters:
+    
+  * **name** (_str_) – The name of the output port. Must be unique for all output port groups.
+  * **description** (_str_) – A description of the output port.
+
+
+
+knime.extension.output_image_group(_name :str_, _description :str_)
+    
+Use this decorator to define an output port group of the type “Image” of a node.
+The configure method must return specs of the type ImagePortObjectSpec. The execute method must return a bytes object containing the image data. Note that the image data must be valid for the format defined in configure. 
+
+Parameters:
+    
+  * **name** (_str_) – The name of the image output port. Must be unique for all output port groups.
+  * **description** (_str_) – Description of the image output port
+
+
+Examples
+```
+>>> @knext.node(...)
+... @knext.output_image_group(
+...   name="PNG Output Image Group",
+...   description="An example PNG output image")
+... @knext.output_image_group(
+...   name="SVG Output Image Group",
+...   description="An example SVG output image")
+... class ImageNode:
+...   def configure(self, config_context):
+...     # if 2 ports are connected per group, we will have 2 PNG and 2 SVG outputs
+...     port_numbers = config_context.get_connected_output_port_numbers()
+...     return (
+...       [knext.ImagePortObjectSpec(knext.ImageFormat.PNG]*port_numbers[0],
+...       [knext.ImagePortObjectSpec(knext.ImageFormat.SVG)]*port_numbers[1],
+...     )
+...
+...   def execute(self, exec_context):
+...     # create a plot ...
+...     buffer_png = io.BytesIO()
+...     plt.savefig(buffer_png, format="png")
+...
+...     buffer_svg = io.BytesIO()
+...     plt.savefig(buffer_svg, format="svg")
+...
+...     return (
+...       [buffer_png.getvalue()]*2,
+...       [buffer_svg.getvalue()]*2,
+...     )
+
+```
+
+
+knime.extension.output_binary_group(_name :str_, _description :str_, _id :str|None=None_)
+    
+Use this decorator to define an output port group of type “Binary” for a node. 
+
+Parameters:
+    
+  * **name** (_str_) – The name of the output port group. Must be unique for all output port groups.
+  * **description** (_str_) – A description of the output port group.
+  * **id** (_Optional_ _[__str_ _]_) – A unique ID identifying the type of the PortGroup. Only PortGroups with equal ID can be connected in KNIME.
+
+
+### Parameters
+To add parameterization to your nodes, the configuration dialog can be defined and customized. Each parameter can be used in the nodes execution by accessing `self.param_name`. These parameters can be set up by using the following parameter types. For a more detailed description see Defining the node’s configuration dialog. 
+
+_class_ knime.extension.IntParameter(_label :str|None=None_, _description :str|None=None_, _default_value :int|Callable[[Version],int]=0_, _validator :Callable[[int],None]|None=None_, _min_value :int|None=None_, _max_value :int|None=None_, _since_version :Version|str|None=None_, _is_advanced :bool=False_)
+    
+Parameter class for primitive integer types. 
+
+_class_ knime.extension.DoubleParameter(_label :str|None=None_, _description :str|None=None_, _default_value :float|Callable[[Version],float]=0.0_, _validator :Callable[[float],None]|None=None_, _min_value :float|None=None_, _max_value :float|None=None_, _since_version :Version|str|None=None_, _is_advanced :bool=False_)
+    
+Parameter class for primitive float types. 
+
+_class_ knime.extension.BoolParameter(_label :str|None=None_, _description :str|None=None_, _default_value :bool|Callable[[Version],bool]=False_, _validator :Callable[[bool],None]|None=None_, _since_version :Version|str|None=None_, _is_advanced :bool=False_)
+    
+Parameter class for primitive boolean types. 
+
+_class_ knime.extension.StringParameter(_label :str|None=None_, _description :str|None=None_, _default_value :str|Callable[[Version],str]=''_, _enum :List[str]|None=None_, _validator :Callable[[str],None]|None=None_, _since_version :Version|str|None=None_, _is_advanced :bool=False_, _choices :Callable|None=None_)
+    
+Parameter class for primitive string types. 
+
+_class_ knime.extension.ColumnParameter(_label :str|None=None_, _description :str|None=None_, _port_index :int=0_, _column_filter :Callable[[Column],bool]|None=None_, _include_row_key :bool=False_, _include_none_column :bool=False_, _since_version :str|None=None_, _is_advanced :bool=False_, _schema_provider =None_, _default_value :str|Callable[[Version],str]|None=None_)
+    
+Parameter class for single columns. 
+
+_class_ knime.extension.MultiColumnParameter(_label :str|None=None_, _description :str|None=None_, _port_index :int|None=0_, _column_filter :Callable[[Column],bool]|None=None_, _since_version :Version|str|None=None_, _is_advanced :bool=False_)
+    
+Parameter class for multiple columns. 
+
+_class_ knime.extension.ColumnFilterParameter(_label :str|None=None_, _description :str|None=None_, _port_index :int|None=0_, _default_value :ColumnFilterConfig|Callable[[Version],ColumnFilterConfig]|None=None_, _column_filter :Callable[[Column],bool]|None=None_, _since_version :Version|str|None=None_, _is_advanced :bool=False_, _schema_provider =None_)
+    
+Parameter class that supports full column filtering for columns. 
+
+_class_ knime.extension.ColumnFilterConfig(_mode =ColumnFilterMode.MANUAL_, _pattern_filter :PatternFilterConfig|None=None_, _type_filter :TypeFilterConfig|None=None_, _manual_filter :ManualFilterConfig|None=None_, _included_column_names :List[str]|None=None_, _pre_filter :Callable[[Column],bool]|None=None_)
+    
+The value of a ColumnFilterParameter is a ColumnFilterConfig instance with a mode as well as configuration for the different modes.
+Use the apply method to filter schemas and tables according to this filter config
+Examples
+```
+>>> @knext.node(
+...   name="Python Column Filter",
+...   node_type=knext.NodeType.MANIPULATOR,
+...   icon_path=...,
+...   category=...,
+... )
+... @knext.input_table("Input Table", "Input table.")
+... @knext.output_table("Output Table", "Output table.")
+... class ColumnFilterNode:
+...   column_filter = knext.ColumnFilterParameter("Column Filter", "Column Filter")
+...
+...   def configure(self, config_context, input_schema: knext.Schema):
+...     return self.column_filter.apply(input_schema)
+...
+...   def execute(self, exec_context, input_table):
+...     return self.column_filter.apply(input_table)
+
+```
+
+
+apply(_columnar :_Columnar_) → _Columnar
+    
+Filter a table schema or a table according to this column filter configuration. 
+
+_class_ knime.extension.EnumParameter(_label :str|None=None_, _description :str|None=None_, _default_value :str|Callable[[Version],str]|None=None_, _enum :EnumParameterOptions|None=None_, _validator :Callable[[str],None]|None=None_, _since_version :Version|str|None=None_, _is_advanced :bool=False_, _style :Style|None=None_)
+    
+Parameter class for multiple-choice parameter types. Replicates and extends the enum functionality previously implemented as part of StringParameter.
+A subclass of EnumParameterOptions should be provided as the enum parameter, which should contain class attributes of the form OPTION_NAME = (OPTION_LABEL, OPTION_DESCRIPTION). The corresponding option attributes can be accessed via MyOptions.OPTION_NAME.name, .label, and .description respectively.
+The .name attribute of each option is used as the selection constant, e.g. MyOptions.OPTION_NAME.name == “OPTION_NAME”.
+Examples
+```
+>>> class CoffeeOptions(EnumParameterOptions):
+...   CLASSIC = ("Classic", "The classic chocolatey taste, with notes of bitterness and wood.")
+...   FRUITY = ("Fruity", "A fruity taste, with notes of berries and citrus.")
+...   WATERY = ("Watery", "A watery taste, with notes of water and wetness.")
+...
+... coffee_selection_param = knext.EnumParameter(
+...   label="Coffee Selection",
+...   description="Select the type of coffee you like to drink.",
+...   default_value=CoffeeOptions.CLASSIC.name,
+...   enum=CoffeeOptions,
+... )
+
+```
+
+
+_class_ Style(_value_)
+    
+An enumeration. 
+
+_class_ knime.extension.EnumParameterOptions(_value_)
+    
+A helper class for creating EnumParameter options, based on Python’s Enum class.
+Developers should subclass this class, and provide enumeration options as class attributes of the subclass, of the form `OPTION_NAME = (OPTION_LABEL, OPTION_DESCRIPTION)`.
+Enum option objects can be accessed as attributes of the EnumParameterOptions subclass, e.g. `MyEnum.OPTION_NAME`. Each option object has the following attributes:
+  * name: the name of the class attribute, e.g. “OPTION_NAME”, which is used as the selection constant;
+  * label: the label of the option, displayed in the configuration dialogue of the node;
+  * description: the description of the option, used along with the label to generate a list of the available options in the Node Description and in the configuration dialogue of the node.
+
+
+Examples
+```
+>>> class CoffeeOptions(EnumParameterOptions):
+...   CLASSIC = ("Classic", "The classic chocolatey taste, with notes of bitterness and wood.")
+...   FRUITY = ("Fruity", "A fruity taste, with notes of berries and citrus.")
+...   WATERY = ("Watery", "A watery taste, with notes of water and wetness.")
+
+```
+
+
+_classmethod_ get_all_options()
+    
+Returns a list of all options defined in the EnumParameterOptions subclass. 
+
+_class_ knime.extension.EnumSetParameter(_label :str|None=None_, _description :str|None=None_, _default_value :List[str]|Callable[[Version],List[str]]|None=None_, _enum :EnumParameterOptions|None=None_, _validator :Callable[[str],None]|None=None_, _since_version :Version|str|None=None_, _is_advanced :bool=False_)
+    
+Parameter class for multiple-choice parameter types. Expands the EnumParameter by enabling to select multiple enum constants.
+A subclass of EnumParameterOptions should be provided as the enum parameter, which should contain class attributes of the form OPTION_NAME = (OPTION_LABEL, OPTION_DESCRIPTION). The corresponding option attributes can be accessed via MyOptions.OPTION_NAME.name, .label, and .description respectively.
+The .name attribute of each option is used as the selection constant, e.g. MyOptions.OPTION_NAME.name == “OPTION_NAME”.
+Examples
+```
+>>> class CoffeeOptions(EnumParameterOptions):
+...   CLASSIC = ("Classic", "The classic chocolatey taste, with notes of bitterness and wood.")
+...   FRUITY = ("Fruity", "A fruity taste, with notes of berries and citrus.")
+...   WATERY = ("Watery", "A watery taste, with notes of water and wetness.")
+...
+... coffee_selection_param = knext.EnumSetParameter(
+...   label="Coffee Selection",
+...   description="Select the types of coffee you like to drink.",
+...   default_value=[CoffeeOptions.CLASSIC.name, CoffeeOptions.FRUITY.name],
+...   enum=CoffeeOptions,
+... )
+
+```
+
+
+_class_ knime.extension.DateTimeParameter(_label :str|None=None_, _description :str|None=None_, _default_value :str|date|None=None_, _validator =None_, _min_value :str|date|None=None_, _max_value :str|date|None=None_, _since_version =None_, _is_advanced =False_, _show_date =True_, _show_time =False_, _show_seconds =False_, _show_milliseconds =False_, _timezone :str|None=None_, _date_format :str|None=None_)
+
+
+_class_ knime.extension.LocalPathParameter(_label :str|None=None_, _description :str|None=None_, _placeholder_text :str=''_, _validator :Callable[[str],None]|None=None_, _since_version :Version|str|None=None_, _is_advanced :bool=False_)
+    
+Parameter class for local file path types. The path is represented as string. 
+
+Raises:
+    
+  * **TypeError** – If the value is not a string.
+  * **ValueError** – If the value is not a valid file path.
+
+
+
+rule(_condition :Condition_, _effect :Effect_)
+    
+Add a rule that conditionally sets whether this parameter is visible or enabled in the dialog. This can be useful if this parameter should only be accessible if another parameter has a certain value.
+Note
+Rules can only depend on parameters on the same level, not in a child or parent parameter group.
+Examples
+```
+>>> @knext.node(args)
+... class MyNode:
+...   string_param = knext.StringParameter(
+...     "String Param Title",
+...     "String Param Title Description",
+...     "default value"
+...   )
+...
+...   # this parameter gets disabled if string_param is "foo" or "bar"
+...   int_param = knext.IntParameter(
+...     "Int Param Title",
+...     "Int Param Description",
+...   ).rule(knext.OneOf(string_param, ["foo", "bar"]), knext.Effect.DISABLE)
+
+```
+
+
+validator(_func_)
+    
+To be used as a decorator for setting a validator function for a parameter. Note that ‘func’ will be encapsulated in ‘_validator’ and will not be available in the namespace of the class.
+Examples
+```
+>>> @knext.node(args)
+... class MyNode:
+...   num_repetitions = knext.IntParameter(
+...     label="Number of repetitions",
+...     description="How often to repeat an action",
+...     default_value=42
+...   )
+...   @num_repetitions.validator
+...   def validate_reps(value):
+...     if value > 100:
+...       raise ValueError("Too many repetitions!")
+...
+...   def configure(args):
+...     pass
+...
+...   def execute(args):
+...     pass
+
+```
+
+
+_class_ knime.extension.ParameterArray(_parameters_ , _label :str|None=None_, _description :str|None=None_, _validator :Callable[[Any],None]|None=None_, _since_version :Version|str|None=None_, _is_advanced :bool=False_, _allow_reorder :bool=True_, _layout_direction :LayoutDirection=LayoutDirection.VERTICAL_, _button_text :str|None=None_, _array_title :str|None=None_)
+    
+A parameter that represents an array of parameters. Each element in the array is an instance of a parameter group.
+Example
+```
+>>> @knext.parameter_group(label="Coffee Selections")
+... class CoffeeSelections:
+...   coffee_options = knext.StringParameter(
+...     "Coffee Options",
+...     "Enter the type of coffee you like to drink.",
+...     default_value="Watery",
+...   )
+...
+...   number_of_cups = knext.IntParameter(
+...     "Number of Cups",
+...     "Enter the number of cups of coffee you usually drink.",
+...     default_value=5,
+...   )
+...
+... coffee_selection = knext.ParameterArray(
+...   label="Coffee Selections",
+...   description="Select the type of coffee you like to drink.",
+...   parameters=CoffeeSelections(),
+...   since_version="5.3.1",
+...   button_text="Add new selection",
+...   array_title="Selections",
+... )
+
+```
+
+
+rule(_condition :Condition_, _effect :Effect_)
+    
+Add a rule that conditionally sets whether this parameter is visible or enabled in the dialog. This can be useful if this parameter should only be accessible if another parameter has a certain value.
+Note
+Rules can only depend on parameters on the same level, not in a child or parent parameter group.
+Examples
+```
+>>> @knext.node(args)
+... class MyNode:
+...   string_param = knext.StringParameter(
+...     "String Param Title",
+...     "String Param Title Description",
+...     "default value"
+...   )
+...
+...   # this parameter gets disabled if string_param is "foo" or "bar"
+...   int_param = knext.IntParameter(
+...     "Int Param Title",
+...     "Int Param Description",
+...   ).rule(knext.OneOf(string_param, ["foo", "bar"]), knext.Effect.DISABLE)
+
+```
+
+
+validator(_func_)
+    
+To be used as a decorator for setting a validator function for a parameter. Note that ‘func’ will be encapsulated in ‘_validator’ and will not be available in the namespace of the class.
+Examples
+```
+>>> @knext.node(args)
+... class MyNode:
+...   num_repetitions = knext.IntParameter(
+...     label="Number of repetitions",
+...     description="How often to repeat an action",
+...     default_value=42
+...   )
+...   @num_repetitions.validator
+...   def validate_reps(value):
+...     if value > 100:
+...       raise ValueError("Too many repetitions!")
+...
+...   def configure(args):
+...     pass
+...
+...   def execute(args):
+...     pass
+
+```
+
+#### Validation
+While each parameter type listed above has default type validation (eg checking if the IntParameter contains only Integers), they also support custom validation via a property-like decorator notation. For instance, this can be used to verify that the parameter value matches a certain criteria (see example below). The validator should be placed below the definition of the corresponding parameter. 
+
+_class_ knime.extension.IntParameter(_label :str|None=None_, _description :str|None=None_, _default_value :int|Callable[[Version],int]=0_, _validator :Callable[[int],None]|None=None_, _min_value :int|None=None_, _max_value :int|None=None_, _since_version :Version|str|None=None_, _is_advanced :bool=False_)
+    
+Parameter class for primitive integer types. 
+
+validator(_func_)
+    
+To be used as a decorator for setting a validator function for a parameter. Note that ‘func’ will be encapsulated in ‘_validator’ and will not be available in the namespace of the class.
+Examples
+```
+>>> @knext.node(args)
+... class MyNode:
+...   num_repetitions = knext.IntParameter(
+...     label="Number of repetitions",
+...     description="How often to repeat an action",
+...     default_value=42
+...   )
+...   @num_repetitions.validator
+...   def validate_reps(value):
+...     if value > 100:
+...       raise ValueError("Too many repetitions!")
+...
+...   def configure(args):
+...     pass
+...
+...   def execute(args):
+...     pass
+
+```
+
+#### Parameter Visibility Rules
+By default, each parameter of a node is visible in the node’s configuration dialog. Parameters can be marked as advanced by setting `is_advanced=True`, which will only show them once the user has clicked “Show advanced settings” in the configuration dialog.
+Sometimes a parameter should only be visible to the user if another parameter has a certain value. For this, each parameter type listed above has a method `rule`. In this method, one can specify a condition based on another parameter, which we call `subject`, and the effect that should be applied to this parameter when the condition becomes true. 
+
+_class_ knime.extension.IntParameter(_label :str|None=None_, _description :str|None=None_, _default_value :int|Callable[[Version],int]=0_, _validator :Callable[[int],None]|None=None_, _min_value :int|None=None_, _max_value :int|None=None_, _since_version :Version|str|None=None_, _is_advanced :bool=False_)
+    
+Parameter class for primitive integer types. 
+
+rule(_condition :Condition_, _effect :Effect_)
+    
+Add a rule that conditionally sets whether this parameter is visible or enabled in the dialog. This can be useful if this parameter should only be accessible if another parameter has a certain value.
+Note
+Rules can only depend on parameters on the same level, not in a child or parent parameter group.
+Examples
+```
+>>> @knext.node(args)
+... class MyNode:
+...   string_param = knext.StringParameter(
+...     "String Param Title",
+...     "String Param Title Description",
+...     "default value"
+...   )
+...
+...   # this parameter gets disabled if string_param is "foo" or "bar"
+...   int_param = knext.IntParameter(
+...     "Int Param Title",
+...     "Int Param Description",
+...   ).rule(knext.OneOf(string_param, ["foo", "bar"]), knext.Effect.DISABLE)
+
+```
+
+
+_class_ knime.extension.Condition
+    
+Abstract base class for all condition types of parameter visibility rules. 
+
+_class_ knime.extension.And(_* conditions:Condition_)
+    
+A Condition that combines other Conditions with AND. 
+
+_class_ knime.extension.Contains(_subject :Any_, _value :Any_)
+    
+A Condition that evaluates to true if one of the values of the `subject` parameter is equal to the expected `value`. 
+
+_class_ knime.extension.OneOf(_subject :Any_, _values :List[Any]_)
+    
+A Condition that evaluates to true if the value of the `subject` parameter is equal to one of the expected `values`. 
+
+_class_ knime.extension.Or(_* conditions:Condition_)
+    
+A Condition that combines other Conditions with OR. 
+
+_class_ knime.extension.Effect(_value_)
+    
+Encodes the effect a rule may cause. 
+
+DISABLE _= 'DISABLE'_
+    
+Disable the parameter if the condition is true 
+
+ENABLE _= 'ENABLE'_
+    
+Enable the parameter if the condition is true 
+
+HIDE _= 'HIDE'_
+    
+Hide the parameter if the condition is true 
+
+SHOW _= 'SHOW'_
+    
+Show the parameter if the condition is true
+#### Parameter Groups
+Additionally these parameters can be combined in `parameter_groups`. These groups are visualized as sections in the configuration dialog. Another benefit of defining parameter groups is the ability to provide group validation. As opposed to only being able to validate a single value when attaching a validator to a parameter, group validators have access to the values of all parameters contained in the group, allowing for more complex validation routines. 
+
+knime.extension.parameter_group(_label :str_, _since_version :Version|str|None=None_, _is_advanced :bool=False_, _layout_direction :LayoutDirection=LayoutDirection.VERTICAL_)
+    
+Decorator for classes implementing parameter groups. Parameter group classes can define parameters and other parameter groups both as class-level attributes and as instance-level attributed inside the __init__ method.
+Parameter group classes can set values for their parameters inside the __init__ method during the constructor call (e.g. from the node containing the group, or another group). Note: when declaring the keyword arguments for the __init__ method of your parameter group class, you should refrain from using keywords from the following list of reserved keywords: since_version, is_advanced, and validator. These are used by the wrapper class in order to enable the backend functionality.
+Group validators need to raise an exception if a values-based condition is violated, where values is a dictionary of parameter names and values. Group validators can be set using either of the following methods:
+  * By implementing the “validate(self, values)” method inside the class definition of the group.
+
+
+Examples
+```
+>>> def validate(self, values):
+...   assert values['first_param'] + values['second_param'] < 100
+
+```
+
+  * By using the “@group_name.validator” decorator notation inside the class definition of the “parent” of the group. The decorator has an optional ‘override’ parameter, set to True by default, which overrides the “validate” method. If ‘override’ is set to False, the “validate” method, if defined, will be called first.
+
+
+```
+>>> @hyperparameters.validator(override=False)
+... def validate_hyperparams(values):
+...   assert values['first_param'] + values['second_param'] < 100
+
+```
+
+or
+```
+>>> @knext.parameter_group(label="My Settings")
+... class MySettings:
+...   name = knext.StringParameter("Name", "The name of the person", "Bario")
+...   num_repetitions = knext.IntParameter("NumReps", "How often do we repeat?", 1, min_value=1)
+...
+...   @num_repetitions.validator
+...   def reps_validator(value):
+...     if value == 2:
+...       raise ValueError("I don't like the number 2")
+...
+... @knext.node(args)
+... class MyNodeWithSettings:
+...   settings = MySettings()
+...   def configure(args):
+...     pass
+...
+...   def execute(args):
+...     pass
+
+```
+
+## Tables
+`Table` and `Schema` are the two classes that are used to communicate tabular data (Table) during execute, or the table structure (Schema) in configure between Python and KNIME. 
+
+_class_ knime.extension.Table
+    
+This class serves as public API to create KNIME tables either from pandas or pyarrow. These tables can than be sent back to KNIME. This class has to be instantiated by calling either `from_pyarrow()` or `from_pandas()` 
+
+__getitem__(_slicing :slice|List[int]|List[str]|Tuple[slice|List[int]|List[str],slice]_) → _TabularView
+    
+Creates a view of this Table by slicing rows and columns. The slicing syntax is similar to that of numpy arrays, but columns can also be addressed as index lists or via a list of column names.
+Notes
+The syntax is [column_slice, row_slice]. Note that this is the exact opposite order than in the deprecated scripting API’s ReadTable. 
+
+Parameters:
+    
+  * **column_slice** (_int_ _,__str_ _,__slice_ _,__list_) – A column index, a column name, a slice object, a list of column indices, or a list of column names.
+  * **row_slice** (_slice_ _,__optional_) – A slice object describing which rows to use.
+
+
+
+Returns:
+    
+A _TabularView representing a slice of the original Table. 
+
+Return type:
+    
+TabularView
+Examples
+```
+>>> row_sliced_table = table[:, :100] # Get the first 100 rows
+... column_sliced_table = table[["name", "age"]] # Get all rows of the columns "name" and "age"
+... row_and_column_sliced_table = table[1:5, :100] # Get the first 100 rows of columns 1,2,3,4
+
+```
+
+
+append(_other :_Columnar|Sequence[_Columnar]_) → _ColumnarView
+    
+Append another _Columnar object (e.g. Table, Schema) or a sequence of _Columnar objects to the current _Columnar object. 
+
+Parameters:
+    
+**other** (_Union_ _[__"_Columnar"__,__Sequence_ _[__"_Columnar"__]__]_) – The _Columnar object or a sequence of _Columnar objects to be appended. 
+
+Returns:
+    
+A _ColumnarView object representing the current _Columnar object after the append operation. 
+
+Return type:
+    
+_ColumnarView 
+
+batches() → Iterator[Table]
+    
+Returns a generator over the batches in this table. A batch is part of the table with all columns, but only a subset of the rows. A batch should always fit into memory (max size currently 64mb). The table being passed to execute() is already present in batches, so accessing the data this way is very efficient. 
+
+Returns:
+    
+A generator object that yields batches of the table. 
+
+Return type:
+    
+generator
+Examples
+```
+>>> output_table = BatchOutputTable.create()
+... for batch in my_table.batches():
+...   input_batch = batch.to_pandas()
+...   # process the batch
+...   output_table.append(Table.from_pandas(input_batch))
+
+```
+
+
+_abstract property_column_names _: list_
+    
+Get the names of the columns in a dataset. 
+
+_static_ from_pandas(_data :pandas.DataFrame_, _sentinel :str|int|None=None_, _row_ids :str='auto'_)
+    
+Factory method to create a Table given a pandas.DataFrame. The index of the data frame will be used as RowKey by KNIME.
+Examples
+```
+>>> Table.from_pandas(my_pandas_df, sentinel="min")
+
+```
+
+
+Parameters:
+    
+  * **data** (_pandas.DataFrame_) – A pandas DataFrame.
+  * **sentinel** (_str_ _,__optional_) – 
+Interpret the following values in integral columns as missing value:
+    * `"min"`: min int32 or min int64 depending on the type of the column
+    * `"max"`: max int32 or max int64 depending on the type of the column
+    * a special integer value that should be interpreted as missing value
+  * **row_ids** (_{'keep'__,__'generate'__,__'auto'}__,__optional_) – 
+Defines what RowID should be used. Must be one of the following values:
+    * `"keep"`: Keep the `DataFrame.index` as the RowID. Convert the index to strings if necessary.
+    * `"generate"`: Generate new RowIDs of the format `f"Row{i}"` where `i` is the position of the row (from `0` to `length-1`).
+    * `"auto"`: If the `DataFrame.index` is of type int or unsigned int, use `f"Row{n}"` where `n` is the index of the row. Else, use “keep”.
+
+
+
+Returns:
+    
+The created Table object. 
+
+Return type:
+    
+Table 
+
+_static_ from_pyarrow(_data :pyarrow.Table_, _sentinel :str|int|None=None_, _row_ids :str='auto'_)
+    
+Factory method to create a Table given a pyarrow.Table.
+All batches of the table must have the same number of rows. Only the last batch can have less rows than the other batches.
+Examples
+```
+>>> Table.from_pyarrow(my_pyarrow_table, sentinel="min")
+
+```
+
+
+Parameters:
+    
+  * **data** (_pyarrow.Table_) – A pyarrow.Table
+  * **sentinel** (_str_) – 
+Interpret the following values in integral columns as missing value:
+    * `"min"` min int32 or min int64 depending on the type of the column
+    * `"max"` max int32 or max int64 depending on the type of the column
+    * a special integer value that should be interpreted as missing value
+  * **row_ids** (_str_) – 
+Defines what RowID should be used. Must be one of the following values:
+    * `"keep"`: Use the first column of the table as RowID. The first column must be of type string.
+    * `"generate"`: Generate new RowIDs of the format `f"Row{i}"` where `i` is the position of the row (from `0` to `length-1`).
+    * `"auto"`: Use the first column of the table if it has the name “<RowID>” and is of type string or integer.
+      * If the “<RowID>” column is of type string, use it directly
+      * If the “<RowID>” column is of an integer type use `f"Row{n}` where `n` is the value of the integer column.
+      * Generate new RowIDs (`"generate"`) if the first column has another type or name.
+
+
+
+Returns:
+    
+The created Table instance. 
+
+Return type:
+    
+pyarrow.Table 
+
+insert(_other :_Columnar_, _at :int_) → _Columnar
+    
+Insert a column or another _Columnar object (e.g. Table, Schema) into the current _Columnar object at a specific position. 
+
+Parameters:
+    
+  * **other** (_Columnar or Column) – The column or _Columnar object to be inserted.
+  * **at** (_int_) – The index at which the insertion should occur.
+
+
+
+Returns:
+    
+The _Columnar object after the insertion. 
+
+Return type:
+    
+_Columnar 
+
+Raises:
+    
+**TypeError** – If other is not of type _Columnar or Column.
+Notes
+The insertion is done in-place, meaning the current _Columnar object is modified. 
+
+_abstract property_num_columns _: int_
+    
+Get the number of columns in the dataset. 
+
+remove(_slicing :str|int|List[str]_)
+    
+Implements remove method for Columnar data structures. The input can be a column index, a column name or a list of column names.
+If the input is a column index, the column with that index will be removed. If it is a column name, then the first column with matching name is removed. Passing a list of column names will filter out all (including duplicate) columns with matching names. 
+
+Parameters:
+    
+**slicing** (_int_ _|__list_ _|__str_) – Can be of type integer representing the index in column_names to remove. Or a list of strings removing every column matching from that list. Or a string of which first occurrence is removed from the column_names. 
+
+Returns:
+    
+**_ColumnarView** 
+
+Return type:
+    
+A View missing the columns to be removed. 
+
+Raises:
+    
+  * **ValueError** – If no matching column is found given a list or str.:
+  * **IndexError** – If column is accessed by integer and is out of bounds.:
+  * **TypeError** – If the key is neither an integer nor a string or list of strings.:
+
+
+
+_abstract property_schema _: Schema_
+    
+The schema of this table, containing column names, types, and potentially metadata 
+
+to_batches() → Iterator[Table]
+    
+Alias for Table.batches() 
+
+to_pandas(_sentinel :str|int|None=None_) → pandas.DataFrame
+    
+Access this table as a pandas.DataFrame. 
+
+Parameters:
+    
+**sentinel** (_str_ _or_ _int_) – 
+Replace missing values in integral columns by the given value. It can be one of the following:
+>   * `"min"` min int32 or min int64 depending on the type of the column
+>   * `"max"` max int32 or max int64 depending on the type of the column
+>   * An integer value that should be inserted for each missing value
+> 
+
+
+to_pyarrow(_sentinel :str|int|None=None_) → pyarrow.Table
+    
+Access this table as a pyarrow.Table. 
+
+Parameters:
+    
+**sentinel** (_str_ _or_ _int_) – 
+Replace missing values in integral columns by the given value, which can be one of the following:
+  * ”min”: minimum value of int32 or int64 depending on the type of the column
+  * ”max”: maximum value of int32 or int64 depending on the type of the column
+  * An integer value that should be inserted for each missing value
+
+
+
+_class_ knime.extension.BatchOutputTable
+    
+An output table generated by combining smaller tables (also called batches).
+Notes
+  * All batches must have the same number, names and types of columns.
+  * All batches except the last batch must have the same number of rows.
+  * The last batch can have fewer rows than the other batches.
+  * This object does not provide means to continue to work with the data but is meant to be used as a return value of a Node’s execute() method.
+
+
+
+_abstract_ append(_batch :Table|pandas.DataFrame|pyarrow.Table|pyarrow.RecordBatch_) → None
+    
+Append a batch to this output table. The first batch defines the structure of the table, and all subsequent batches must have the same number of columns, column names and column types.
+Notes
+Keep in mind that the RowID will be handled according to the “row_ids” mode chosen in BatchOutputTable.create. 
+
+_static_ create(_row_ids :str='keep'_)
+    
+Create an empty BatchOutputTable 
+
+Parameters:
+    
+**row_ids** (_str_) – 
+Defines what RowID should be used. Must be one of the following values:
+  * ”keep”:
+>     * For appending DataFrames: Keep the DataFrame.index as the RowID. Convert the index to strings if necessary.
+>     * For appending Arrow tables or record batches: Use the first column of the table as RowID. The first column must be of type string.
+  * ”generate”: Generate new RowIDs of the format “Row{i}”
+
+
+
+_static_ from_batches(_generator_ , _row_ids :str='generate'_)
+    
+Create output table where each batch is provided by a generator 
+
+Parameters:
+    
+**row_ids** (_object_) – See BatchOutputTable.create. 
+
+_abstract property_num_batches _: int_
+    
+The number of batches written to this output table. 
+
+_class_ knime.extension.Schema(_ktypes :List[KnimeType|Type]_, _names :List[str]_, _metadata :List|None=None_)
+    
+A schema defines the data types and names of the columns inside a table. Additionally, it can hold metadata for the individual columns. 
+
+__getitem__(_slicing :slice|List[int]|List[str]_) → _ColumnarView
+    
+Creates a view of this Table or Schema by slicing columns. The slicing syntax is similar to that of numpy arrays, but columns can also be addressed as index lists or via a list of column names. 
+
+Parameters:
+    
+**slicing** (_int_ _,__str_ _,__slice_ _,__list_) – A column index, a column name, a slice object, a list of column indices, or a list of column names. For single indices, the view will create a “Column” object. For slices or lists of indices, a new Schema will be returned. 
+
+Returns:
+    
+A representation of a slice of the original Schema or Table. 
+
+Return type:
+    
+_ColumnarView
+Examples
+```
+>>> # Get columns 1,2,3,4
+... sliced_schema = schema[1:5]
+
+```
+
+```
+>>> # Get the columns "name" and "age"
+... sliced_schema = schema[["name", "age"]]
+
+```
+
+
+append(_other :_Columnar|Sequence[_Columnar]_) → _ColumnarView
+    
+Append another _Columnar object (e.g. Table, Schema) or a sequence of _Columnar objects to the current _Columnar object. 
+
+Parameters:
+    
+**other** (_Union_ _[__"_Columnar"__,__Sequence_ _[__"_Columnar"__]__]_) – The _Columnar object or a sequence of _Columnar objects to be appended. 
+
+Returns:
+    
+A _ColumnarView object representing the current _Columnar object after the append operation. 
+
+Return type:
+    
+_ColumnarView 
+
+_property_ column_names _: List[str]_
+    
+Get the names of the columns in a dataset. 
+
+_classmethod_ deserialize(_table_schema :dict_) → Schema
+    
+Construct a Schema from a dict that was retrieved from KNIME in JSON encoded form as the input to a node’s configure() method. KNIME provides table information with a RowKey column at the beginning, which we drop before returning the created schema. 
+
+_classmethod_ from_columns(_columns :Sequence[Column]|Column_)
+    
+Create a schema from a single column or a list of columns. 
+
+Parameters:
+    
+**columns** (_Union_ _[__Sequence_ _[__Column_ _]__,__Column_ _]_) – A single column or a list of columns. 
+
+Returns:
+    
+The constructed schema. 
+
+Return type:
+    
+Schema 
+
+_classmethod_ from_types(_ktypes :List[KnimeType|Type]_, _names :List[str]_, _metadata :List|None=None_)
+    
+Create a schema from a list of column data types, names and metadata. 
+
+Parameters:
+    
+  * **ktypes** (_List_ _[__Union_ _[__KnimeType_ _,__Type_ _]__]_) – A list of KNIME types or types known to KNIME.
+  * **names** (_List_ _[__str_ _]_) – A list of column names.
+  * **metadata** (_List_ _,__optional_)
+
+
+
+Returns:
+    
+The constructed schema. 
+
+Return type:
+    
+Schema 
+
+insert(_other :_Columnar_, _at :int_) → _Columnar
+    
+Insert a column or another _Columnar object (e.g. Table, Schema) into the current _Columnar object at a specific position. 
+
+Parameters:
+    
+  * **other** (_Columnar or Column) – The column or _Columnar object to be inserted.
+  * **at** (_int_) – The index at which the insertion should occur.
+
+
+
+Returns:
+    
+The _Columnar object after the insertion. 
+
+Return type:
+    
+_Columnar 
+
+Raises:
+    
+**TypeError** – If other is not of type _Columnar or Column.
+Notes
+The insertion is done in-place, meaning the current _Columnar object is modified. 
+
+_property_ num_columns
+    
+Get the number of columns in the dataset. 
+
+remove(_slicing :str|int|List[str]_)
+    
+Implements remove method for Columnar data structures. The input can be a column index, a column name or a list of column names.
+If the input is a column index, the column with that index will be removed. If it is a column name, then the first column with matching name is removed. Passing a list of column names will filter out all (including duplicate) columns with matching names. 
+
+Parameters:
+    
+**slicing** (_int_ _|__list_ _|__str_) – Can be of type integer representing the index in column_names to remove. Or a list of strings removing every column matching from that list. Or a string of which first occurrence is removed from the column_names. 
+
+Returns:
+    
+**_ColumnarView** 
+
+Return type:
+    
+A View missing the columns to be removed. 
+
+Raises:
+    
+  * **ValueError** – If no matching column is found given a list or str.:
+  * **IndexError** – If column is accessed by integer and is out of bounds.:
+  * **TypeError** – If the key is neither an integer nor a string or list of strings.:
+
+
+
+serialize() → Dict
+    
+Convert this Schema into dict which can then be JSON encoded and sent to KNIME as result of a node’s configure() method. Because KNIME expects a row key column as first column of the schema, but we don’t include this in the KNIME Python table schema, we insert a row key column here. 
+
+Raises:
+    
+**RuntimeError** – if duplicate column names are detected: 
+
+_class_ knime.extension.Column(_ktype :KnimeType|Type_, _name :str_, _metadata :dict|None=None_)
+    
+A column inside a table schema consists of the KNIME datatype, a column name, and optional metadata. 
+
+__init__(_ktype :KnimeType|Type_, _name :str_, _metadata :dict|None=None_)
+    
+Construct a Column from type, name and optional metadata. 
+
+Parameters:
+    
+  * **ktype** (_Union_ _[__KnimeType_ _,__Type_ _]_) – The KNIME type of the column or a type which can be converted via knime.api.schema.logical(ktype) to a KNIME type. Raises a TypeError if the type is not a KNIME type or cannot be converted to a KNIME type.
+  * **name** (_str_) – The name of the column. May not be empty. Raises a ValueError if the name is empty.
+  * **metadata** (_dict_ _,__optional_) – Metadata of this column.
+
+
+
+Returns:
+    
+The constructed column. 
+
+Return type:
+    
+Column 
+
+Raises:
+    
+  * **TypeError** – If the type is not a KNIME type or cannot be converted to a KNIME type.
+  * **ValueError** – If the name is empty.
+
+
+### Data Types
+These are helper functions to create KNIME compatible datatypes. For instance, if a new column is created. 
+
+knime.extension.int32()
+    
+Create a KNIME integer type with 32 bits. 
+
+knime.extension.int64()
+    
+Create a KNIME integer type with 64 bits 
+
+knime.extension.double()
+    
+Create a KNIME floating point type with double precision (64 bits). 
+
+knime.extension.bool_()
+    
+Create a KNIME boolean type. 
+
+knime.extension.string(_dict_encoding_key_type :DictEncodingKeyType|None=None_)
+    
+Create a KNIME string type. 
+
+Parameters:
+    
+**dict_encoding_key_type** (_DictEncodingKeyType_ _,__optional_) – The key type to use for dictionary encoding. If this is None (the default), no dictionary encoding will be used. Dictionary encoding helps to reduce storage space and read/write performance for columns with repeating values such as categorical data. 
+
+knime.extension.blob(_dict_encoding_key_type :DictEncodingKeyType|None=None_)
+    
+Create a KNIME blob type for binary data of variable length. 
+
+Parameters:
+    
+**dict_encoding_key_type** (_DictEncodingKeyType_ _,__optional_) – The key type to use for dictionary encoding. If this is None (the default), no dictionary encoding will be used. Dictionary encoding helps to reduce storage space and read/write performance for columns with repeating values such as categorical data. 
+
+knime.extension.list_(_inner_type :KnimeType_)
+    
+Create a KNIME type that is a list of the given inner types 
+
+Parameters:
+    
+**inner_type** (_KnimeType_) – The type of the elements in the list. Must be a KnimeType. 
+
+knime.extension.struct(_* inner_types_)
+    
+Create a KNIME structured data type where each given argument represents a field of the struct. 
+
+Parameters:
+    
+**inner_types** (_list_) – The argument list of this method defines the fields in this structured data type. Each inner type must be a KNIME type 
+
+knime.extension.logical(_value_type_) → LogicalType
+    
+Create a KNIME logical data type of the given Python value type. 
+
+Parameters:
+    
+**value_type** (_type_) – The type of the values inside this column. A knime.api.types.PythonValueFactory must be registered for this type. 
+
+Raises:
+    
+**TypeError** – If no PythonValueFactory has been registered for this value type with knime.api.types.register_python_value_factory. 
+
+knime.extension.datetime(_date :bool|None=True_, _time :bool|None=True_, _timezone :bool|None=False_) → LogicalType
+     
+
+Currently, KNIME supports the following date/time formats:
+    
+  * Local DateTime (date=True, time=True, timezone=False)
+  * Local Date (date=True, time=False, timezone=False)
+  * Local Time (date=False, time=True, timezone=False)
+  * Zoned DateTime (date=True, time=True, timezone=True)
+
+
+
+Parameters:
+    
+  * **date** (_Optional_ _[__bool_ _]_) – Whether the column contains a date.
+  * **time** (_Optional_ _[__bool_ _]_) – Whether the column contains a time.
+  * **timezone** (_Optional_ _[__bool_ _]_) – Whether the column contains a timezone.
+
+
+
+Returns:
+    
+A LogicalType representing the given date/time format. 
+
+Return type:
+    
+LogicalType 
+
+Raises:
+    
+**ValueError** – If the combination of date, time and timezone is not supported or the datetime types are not registered in KNIME.
+## Views 
+
+knime.scripting.io.view(_obj_) → NodeView
+    
+Create an NodeView for the given object.
+This method tries to find out the best option to display the given object. First, the method checks if a special view implementation (listed below) exists for the given object. Next, IPython _repr_html_, _repr_svg_, _repr_png_, or _repr_jpeg_ are used.
+Special view implementations:
+  * HTML: The obj must be of type str and start with “<!DOCTYPE html>”. The document must be self-contained and must not reference external resources. Links to external resources will be opened in an external browser.
+  * SVG: The obj must be of type str and contain a valid SVG
+  * PNG: The obj must be of type bytes and contain a PNG image file
+  * JPEG: The obj must be of type bytes and contain a JPEG image file
+  * Matplotlib: The obj must be a matplotlib.figure.Figure
+  * Plotly: The obj must be a plotly.graph_objects.Figure
+
+
+
+Parameters:
+    
+**obj** (_Any_) – The object which should be displayed 
+
+Raises:
+    
+**ValueError** – If no view could be created for the given object 
+
+knime.scripting.io.view_matplotlib(_fig =None_, _format ='png'_) → NodeView
+    
+Create a view showing the given matplotlib figure.
+The figure is displayed by exporting it as an SVG. If no figure is given the current active figure is displayed. Note that the figure is closed and should not be used after calling this method. 
+
+Parameters:
+    
+  * **fig** (_matplotlib.figure.Figure_) – A matplotlib figure which should be displayed.
+  * **format** (_str_) – The format of the view inside the HTML document. Either “png” or “svg”.
+
+
+
+Raises:
+    
+  * **ImportError** – If matplotlib is not available.
+  * **TypeError** – If the figure is not a matplotlib figure.
+
+
+
+knime.scripting.io.view_seaborn() → NodeView
+    
+Create a view showing the current active seaborn figure.
+This function just calls view_matplotlib() because seaborn plots are just matplotlib figures under the hood. 
+
+Raises:
+    
+**ImportError** – If matplotlib is not available. 
+
+knime.scripting.io.view_plotly(_fig_) → NodeView
+    
+Create a view showing the given plotly figure.
+The figure is displayed by exporting it as an HTML document.
+To be able to synchronize the selection between the view and other KNIME views the customdata of the figure traces must be set to the RowID. 
+
+Parameters:
+    
+**fig** (_plotly.graph_objects.Figure_) – A plotly figure object which should be displayed. 
+
+Raises:
+    
+  * **ImportError** – If plotly is not available.
+  * **TypeError** – If the figure is not a plotly figure.
+
+
+Examples
+```
+>>> fig = px.scatter(df, x="my_x_col", y="my_y_col", color="my_label_col",
+...         custom_data=[df.index])
+... node_view = view_plotly(fig)
+
+```
+
+
+knime.scripting.io.view_html(_html :str_, _svg_or_png :str|bytes|None=None_, _render_fn :Callable[[],str|bytes]|None=None_) → NodeView
+    
+Create a NodeView that displays the given HTML document.
+The document must be self-contained and must not reference external resources. Links to external resources will be opened in an external browser. 
+
+Parameters:
+    
+  * **html** (_str_) – A string containing the HTML document.
+  * **svg_or_png** (_str_ _or_ _bytes_) – A rendered representation of the HTML page. Either a string containing an SVG or a bytes object containing a PNG image.
+  * **render_fn** (_callable_) – A callable that returns an SVG or PNG representation of the page.
+
+
+
+knime.scripting.io.view_svg(_svg :str_) → NodeView
+    
+Create a NodeView that displays the given SVG. 
+
+Parameters:
+    
+**svg** (_str_) – A string containing the SVG. 
+
+knime.scripting.io.view_png(_png :bytes_) → NodeView
+    
+Create a NodeView that displays the given PNG image. 
+
+Parameters:
+    
+**png** (_bytes_) – The bytes of the PNG image 
+
+knime.scripting.io.view_jpeg(_jpeg :bytes_) → NodeView
+    
+Create a NodeView that displays the given JPEG image. 
+
+Parameters:
+    
+**jpeg** (_bytes_) – The bytes of the JPEG image 
+
+knime.scripting.io.view_ipy_repr(_obj_) → NodeView
+    
+Create a NodeView by using the IPython _repr_*_ function of the object.
+Tries to use:
+  1. _repr_html_
+  2. _repr_svg_
+  3. _repr_png_
+  4. _repr_jpeg_
+
+
+in this order. 
+
+Parameters:
+    
+**obj** (_object_) – The object which should be displayed. 
+
+Raises:
+    
+**ValueError** – If no view could be created for the given object. 
+
+_class_ knime.scripting.io.NodeView(_html :str_, _svg_or_png :str|bytes|None=None_, _render_fn :Callable[[],str|bytes]|None=None_)
+    
+A view of a KNIME node that can be displayed for the user.
+Notes
+Do not create a NodeView directly but use the utility functions view, view_html, view_svg, view_png, and view_jpeg.
+## Port Objects
+### Port Object Specs 
+
+_class_ knime.extension.PortObjectSpec
+    
+Base protocol for port object specs.
+A PortObjectSpec must support conversion from/to a dictionary which is then encoded as JSON and sent to/from KNIME. 
+
+_abstract classmethod_deserialize(_data :Dict_, _java_callback =None_)
+    
+Deserialize the port object. 
+
+Parameters:
+    
+  * **data** (_Dict_) – The data dict created by serialize
+  * **java_callback** (_any_) – A callback handler that allows to make callbacks to Java. Was introduced in 5.3 and can be omitted in derived classes.
+
+
+
+Returns:
+    
+The deserialized PortObjectSpec 
+
+Return type:
+    
+PortObjectSpec 
+
+_class_ knime.extension.BinaryPortObjectSpec(_id :str_)
+    
+Port object spec for simple binary port objects.
+BinaryPortObjectSpecs have an ID that is used to ensure that only ports with equal ID can be connected. 
+
+_classmethod_ deserialize(_data_)
+    
+Deserialize the port object. 
+
+Parameters:
+    
+  * **data** (_Dict_) – The data dict created by serialize
+  * **java_callback** (_any_) – A callback handler that allows to make callbacks to Java. Was introduced in 5.3 and can be omitted in derived classes.
+
+
+
+Returns:
+    
+The deserialized PortObjectSpec 
+
+Return type:
+    
+PortObjectSpec 
+
+_class_ knime.extension.ImagePortObjectSpec(_format :str|Enum_)
+    
+Port object spec for image port objects.
+ImagePortObjectSpec objects require the format specified via knext.ImageFormat.PNG or knext.ImageFormat.SVG. 
+
+_classmethod_ deserialize(_data_)
+    
+Deserialize the port object. 
+
+Parameters:
+    
+  * **data** (_Dict_) – The data dict created by serialize
+  * **java_callback** (_any_) – A callback handler that allows to make callbacks to Java. Was introduced in 5.3 and can be omitted in derived classes.
+
+
+
+Returns:
+    
+The deserialized PortObjectSpec 
+
+Return type:
+    
+PortObjectSpec 
+
+_class_ knime.extension.ImageFormat(_value_)
+    
+The image formats available for image ports. 
+
+PNG _= 'png'_
+    
+The PNG format. 
+
+SVG _= 'svg'_
+    
+The SVG format.
+### Custom Port Object Types 
+
+_class_ knime.extension.PortObject(_spec :PortObjectSpec_)
+    
+Base class for custom port objects. They must have a corresponding PortObjectSpec and support serialization from and to bytes. 
+
+_abstract classmethod_deserialize(_spec :PortObjectSpec_, _storage :bytes_) → PortObject
+    
+Creates the port object from its spec and storage. 
+
+_abstract_ serialize() → bytes
+    
+Serialize the object to bytes. 
+
+_property_ spec _: PortObjectSpec_
+    
+Provides access to the spec of the PortObject. 
+
+_class_ knime.extension.ConnectionPortObject(_spec :PortObjectSpec_)
+    
+Connection port objects are a special type of port objects which support dealing with non-serializable objects such as database connections or web sessions.
+Connection port objects are passed downstream by ensuring that the same Python process is used to execute subsequent nodes. ConnectionPortObjects must provide the data in the to_connection_data and create new instances from the same data in from_connection_data. A reference to the data Python object is maintained and handed to downstream nodes. So the data does not need to be serializable/picklable. 
+
+_abstract classmethod_from_connection_data(_spec :PortObjectSpec_, _data :Any_) → ConnectionPortObject
+    
+Construct a ConnectionPortObject from spec and data. The data is the data that has been returned by the to_connection_data method of the ConnectionPortObject by the upstream node.
+The data should not be tempered with, as it is a Python object that is handed to all nodes using this ConnectionPortObject. 
+
+_property_ spec _: PortObjectSpec_
+    
+Provides access to the spec of the PortObject. 
+
+_abstract_ to_connection_data() → Any
+    
+Provide the data that makes up this ConnectionPortObject such that it can be used by downstream nodes in the from_connection_data method.
+## Environment Variables
+This module provides access to the different environment variables that are available in KNIME. 
+
+_class_ knime.extension.ProxySettings(_protocol_name :str|None=None_, _host_name :str|None=None_, _port_number :str|None=None_, _exclude_hosts :str|None=None_, _user_name :str|None=None_, _password :str|None=None_)
+    
+Proxy settings for a KNIME node
+The proxy settings are used to set the proxy environment variables for the KNIME Python integration. 
+
+protocol_name
+    
+The lowercase protocol name. 
+
+Type:
+    
+str or None 
+
+host_name
+    
+The host name. 
+
+Type:
+    
+str or None 
+
+port_number
+    
+The port number. 
+
+Type:
+    
+str or None 
+
+exclude_hosts
+    
+List of hosts to exclude. 
+
+Type:
+    
+str or None 
+
+user_name
+    
+The username. 
+
+Type:
+    
+str or None 
+
+password
+    
+The password. 
+
+Type:
+    
+str or None 
+
+has_credentials
+    
+True if both username and password are provided, False otherwise. 
+
+Type:
+    
+bool 
+
+Parameters:
+    
+  * **protocol_name** (_str_ _,__optional_) – The name of the protocol. Default is None.
+  * **host_name** (_str_ _,__optional_) – The name of the host. Default is None.
+  * **port_number** (_str_ _,__optional_) – The port number. Default is None.
+  * **exclude_hosts** (_str_ _,__optional_) – List of hosts to exclude. Default is None.
+  * **user_name** (_str_ _,__optional_) – The username. Default is None.
+  * **password** (_str_ _,__optional_) – The password. Default is None.
+
+
+
+create_proxy_environment_key_value_pair()
+    
+Create the proxy environment variable strings. 
+
+set_as_environment_variable()
+    
+Set the proxy settings as environment variables. 
+
+from_string(_proxy_string_ , _exclude_hosts =None_)
+    
+Parse the proxy settings from a string. 
+
+supported_proxy_protocols()
+    
+Return the supported proxy protocols for KNIME proxy settings in Python. 
+
+create_proxy_environment_key_value_pair() → Tuple[str,str]
+    
+Create the proxy environment variable strings. 
+
+Returns:
+    
+**Tuple[str, str]** 
+
+Return type:
+    
+The proxy environment variable name and value 
+
+_classmethod_ from_dict(_proxy_dict_)
+    
+Create a ProxySettings object from a dictionary. 
+
+Parameters:
+    
+**proxy_dict** (_dict_) – The dictionary containing the proxy settings. 
+
+Returns:
+    
+The proxy settings object. 
+
+Return type:
+    
+ProxySettings 
+
+_classmethod_ from_string(_proxy_string_ , _exclude_hosts :str|None=None_)
+    
+Parse the proxy settings from a string 
+
+Parameters:
+    
+  * **proxy_string** (_str_) – The string is in the format of: protocol://user:password@host:port or protocol://host:port e.g. http://user:password@localhost:8080 or http://localhost:8080
+  * **exclude_hosts** (_str_) – The hosts that should be excluded from the proxy, e.g. localhost, separated by a comma
+
+
+
+Returns:
+    
+The proxy settings object 
+
+Return type:
+    
+ProxySettings 
+
+set_as_environment_variable()
+    
+Set the proxy settings as environment variables. 
+
+_static_ supported_proxy_protocols() → str
+    
+Return the supported proxy protocols for KNIME proxy settings in Python. 
+
+Returns:
+    
+A string containing the list of supported proxy protocols. 
+
+Return type:
+    
+str 
+
+_class_ knime.extension.get_proxy_settings(_protocol_name :str|None=None_)
+    
+Get the proxy settings from the environment variables.
+Get the proxy settings as configured either in KNIME’s preferences or via environment variables. Even if the proxy settings were configured in KNIME’s preferences only, they are already set as environment variables for this Python process, so they are in effect for everything you do. 
+
+Parameters:
+    
+**protocol_name** (_str_) – The protocol name, e.g. ‘http’ or ‘https’. To see all supported protocols, call ProxySettings.supported_proxy_protocols(). If not provided, the function will return the first proxy settings it finds. 
+
+Returns:
+    
+The proxy settings object. 
+
+Return type:
+    
+ProxySettings
+Previous Next 
+© Copyright 2021, KNIME GmbH.
+Built with Sphinx using a theme provided by Read the Docs. 
+![Logo](https://knime-python.readthedocs.io/en/stable/_static/KNIME_Logo.png)
+  * Python Script API
+    * Inputs and outputs
+    * Classes
+    * Views
+    * Utility functions
+  * Python Extension Development (Labs)
+    * Nodes
+      * Decorators
+        * Port Decorators
+        * Port Group Decorators
+      * Parameters
+        * Validation
+        * Parameter Visibility Rules
+        * Parameter Groups
+    * Tables
+      * Data Types
+    * Views
+    * Port Objects
+      * Port Object Specs
+      * Custom Port Object Types
+    * Environment Variables
+  * Deprecated Python Script API
+    * Inputs and outputs
+    * Factory methods
+    * Classes
+  * License
+
+
+KNIME Python API
+  *   * KNIME Python API
+  * View page source
+
+
+# KNIME Python API
+This document lists the Python API that can be used to communicate with KNIME within Python scripts and Python extensions.
+  * Python Script API
+    * Inputs and outputs
+    * Classes
+    * Views
+    * Utility functions
+  * Python Extension Development (Labs)
+    * Nodes
+      * Decorators
+      * Parameters
+    * Tables
+      * Data Types
+    * Views
+    * Port Objects
+      * Port Object Specs
+      * Custom Port Object Types
+    * Environment Variables
+  * Deprecated Python Script API
+    * Inputs and outputs
+    * Factory methods
+    * Classes
+  * License
+
+
+Next 
+© Copyright 2021, KNIME GmbH.
+Built with Sphinx using a theme provided by Read the Docs. 
+![Logo](https://knime-python.readthedocs.io/en/stable/_static/KNIME_Logo.png)
+  * Python Script API
+    * Inputs and outputs
+    * Classes
+    * Views
+    * Utility functions
+  * Python Extension Development (Labs)
+    * Nodes
+      * Decorators
+        * Port Decorators
+        * Port Group Decorators
+      * Parameters
+        * Validation
+        * Parameter Visibility Rules
+        * Parameter Groups
+    * Tables
+      * Data Types
+    * Views
+    * Port Objects
+      * Port Object Specs
+      * Custom Port Object Types
+    * Environment Variables
+  * Deprecated Python Script API
+    * Inputs and outputs
+    * Factory methods
+    * Classes
+  * License
+
+
+KNIME Python API
+  *   * Python Script API
+  * View page source
+
+
+# Python Script API
+This section lists the API of the module `knime.scripting.io` that functions as the main contact point between KNIME and Python in the KNIME Python Script node. Please refer to the KNIME Python Integration Guide for more details on how to set up and use the node.
+Note
+Before KNIME AP 4.7, the module used to interact with KNIME from Python was called `knime_io` and provided a slightly different API. Since KNIME AP 4.7 the new Python Script node is no longer in Labs status and uses the `knime.scripting.io` module for interaction between KNIME and Python. It uses the same Table and Batch classes as can be used in KNIME Python Extensions. The previous API is described in Deprecated Python Script API
+## Inputs and outputs
+These properties can be used to retrieve data from or pass data back to KNIME Analytics Platform. The length of the input and output lists depends on the number of input and output ports of the node.
+**Example:** If you have a Python Script node configured with two input tables and one input object, you can access the two tables via `knime.scripting.io.input_tables[0]` and `knime.scripting.io.input_tables[1]`, and the input object via `knime.scripting.io.input_objects[0]`.
+Input and output variables used to communicate with KNIME from within KNIME’s Python Scripting nodes 
+
+knime.scripting.io.flow_variables _: Dict[str,Any]__={}_
+    
+A dictionary of flow variables provided by the KNIME workflow. New flow variables can be added to the output of the node by adding them to the dictionary. Supported flow variable types are numbers, strings, booleans and lists thereof. 
+
+knime.scripting.io.input_objects _: List_ _= <knime.scripting._io_containers._FixedSizeListView object>_
+    
+A list of input objects of this script node using zero-based indices. This list has a fixed size, which is determined by the number of input object ports configured for this node. Input objects are Python objects that are passed in from another Python script node’s``output_object`` port. This can, for instance, be used to pass trained models between Python nodes. If no input is given, the list exists but is empty. 
+
+knime.scripting.io.input_tables _: List[Table]__= <knime.scripting._io_containers._FixedSizeListView object>_
+    
+The input tables of this script node. This list has a fixed size, which is determined by the number of input table ports configured for this node. Tables are available in the same order as the port connectors are displayed alongside the node (from top to bottom), using zero-based indexing. If no input is given, the list exists but is empty. 
+
+knime.scripting.io.output_images _: List_ _= <knime.scripting._io_containers._FixedSizeListView object>_
+    
+The output images of this script node. This list has a fixed size, which is determined by the number of output images configured for this node. The value passed to the output port should be a bytes-like object encoding an SVG or PNG image.
+Examples
+```
+>>> import knime.scripting.io as knio
+...
+... data = knio.input_tables[0].to_pandas()
+... buffer = io.BytesIO()
+...
+... pyplot.figure()
+... pyplot.plot('x', 'y', data=data)
+... pyplot.savefig(buffer, format='svg')
+...
+... knio.output_images[0] = buffer.getvalue()
+
+```
+
+
+knime.scripting.io.output_objects _: List_ _= <knime.scripting._io_containers._FixedSizeListView object>_
+    
+The output objects of this script node. This list has a fixed size, which is determined by the number of output object ports configured for this node. Each output object can be an arbitrary Python object as long as it can be _pickled_. Use this to, for example, pass a trained model to another Python script node.
+Examples
+```
+>>> model = torchvision.models.resnet18()
+... ...
+... # train/finetune model
+... ...
+... knime.scripting.io.output_objects[0] = model
+
+```
+
+
+knime.scripting.io.output_tables _: List[Table|BatchOutputTable]__= <knime.scripting._io_containers._FixedSizeListView object>_
+    
+The output tables of this script node. This list has a fixed size, which is determined by the number of output table ports configured for this node. You should assign a `Table` or `BatchOutputTable` to each output port of this node.
+Examples
+```
+>>> import knime.scripting.io as knio
+... knio.output_tables[0] = knio.Table.from_pandas(my_pandas_df)
+
+```
+
+
+knime.scripting.io.output_view _: NodeView|None_ _= None_
+    
+The output view of the script node. This variable must be populated with a `NodeView` when using the Python View node. Views can be created by calling the `view(obj)` method with a viewable object. See the documentation of `view(obj)` to understand how views are created from different kinds of objects.
+Examples
+```
+>>> import knime.scripting.io as knio
+... import plotly.express as px
+...
+... fig = px.scatter(x=data_x, y=data_y)
+... knio.output_view = knio.view(fig)
+
+```
+
+## Classes 
+
+_class_ knime.scripting.io.Table
+    
+This class serves as public API to create KNIME tables either from pandas or pyarrow. These tables can than be sent back to KNIME. This class has to be instantiated by calling either `from_pyarrow()` or `from_pandas()` 
+
+__getitem__(_slicing :slice|List[int]|List[str]|Tuple[slice|List[int]|List[str],slice]_) → _TabularView
+    
+Creates a view of this Table by slicing rows and columns. The slicing syntax is similar to that of numpy arrays, but columns can also be addressed as index lists or via a list of column names.
+Notes
+The syntax is [column_slice, row_slice]. Note that this is the exact opposite order than in the deprecated scripting API’s ReadTable. 
+
+Parameters:
+    
+  * **column_slice** (_int_ _,__str_ _,__slice_ _,__list_) – A column index, a column name, a slice object, a list of column indices, or a list of column names.
+  * **row_slice** (_slice_ _,__optional_) – A slice object describing which rows to use.
+
+
+
+Returns:
+    
+A _TabularView representing a slice of the original Table. 
+
+Return type:
+    
+TabularView
+Examples
+```
+>>> row_sliced_table = table[:, :100] # Get the first 100 rows
+... column_sliced_table = table[["name", "age"]] # Get all rows of the columns "name" and "age"
+... row_and_column_sliced_table = table[1:5, :100] # Get the first 100 rows of columns 1,2,3,4
+
+```
+
+
+append(_other :_Columnar|Sequence[_Columnar]_) → _ColumnarView
+    
+Append another _Columnar object (e.g. Table, Schema) or a sequence of _Columnar objects to the current _Columnar object. 
+
+Parameters:
+    
+**other** (_Union_ _[__"_Columnar"__,__Sequence_ _[__"_Columnar"__]__]_) – The _Columnar object or a sequence of _Columnar objects to be appended. 
+
+Returns:
+    
+A _ColumnarView object representing the current _Columnar object after the append operation. 
+
+Return type:
+    
+_ColumnarView 
+
+batches() → Iterator[Table]
+    
+Returns a generator over the batches in this table. A batch is part of the table with all columns, but only a subset of the rows. A batch should always fit into memory (max size currently 64mb). The table being passed to execute() is already present in batches, so accessing the data this way is very efficient. 
+
+Returns:
+    
+A generator object that yields batches of the table. 
+
+Return type:
+    
+generator
+Examples
+```
+>>> output_table = BatchOutputTable.create()
+... for batch in my_table.batches():
+...   input_batch = batch.to_pandas()
+...   # process the batch
+...   output_table.append(Table.from_pandas(input_batch))
+
+```
+
+
+_abstract property_column_names _: list_
+    
+Get the names of the columns in a dataset. 
+
+_static_ from_pandas(_data :pandas.DataFrame_, _sentinel :str|int|None=None_, _row_ids :str='auto'_)
+    
+Factory method to create a Table given a pandas.DataFrame. The index of the data frame will be used as RowKey by KNIME.
+Examples
+```
+>>> Table.from_pandas(my_pandas_df, sentinel="min")
+
+```
+
+
+Parameters:
+    
+  * **data** (_pandas.DataFrame_) – A pandas DataFrame.
+  * **sentinel** (_str_ _,__optional_) – 
+Interpret the following values in integral columns as missing value:
+    * `"min"`: min int32 or min int64 depending on the type of the column
+    * `"max"`: max int32 or max int64 depending on the type of the column
+    * a special integer value that should be interpreted as missing value
+  * **row_ids** (_{'keep'__,__'generate'__,__'auto'}__,__optional_) – 
+Defines what RowID should be used. Must be one of the following values:
+    * `"keep"`: Keep the `DataFrame.index` as the RowID. Convert the index to strings if necessary.
+    * `"generate"`: Generate new RowIDs of the format `f"Row{i}"` where `i` is the position of the row (from `0` to `length-1`).
+    * `"auto"`: If the `DataFrame.index` is of type int or unsigned int, use `f"Row{n}"` where `n` is the index of the row. Else, use “keep”.
+
+
+
+Returns:
+    
+The created Table object. 
+
+Return type:
+    
+Table 
+
+_static_ from_pyarrow(_data :pyarrow.Table_, _sentinel :str|int|None=None_, _row_ids :str='auto'_)
+    
+Factory method to create a Table given a pyarrow.Table.
+All batches of the table must have the same number of rows. Only the last batch can have less rows than the other batches.
+Examples
+```
+>>> Table.from_pyarrow(my_pyarrow_table, sentinel="min")
+
+```
+
+
+Parameters:
+    
+  * **data** (_pyarrow.Table_) – A pyarrow.Table
+  * **sentinel** (_str_) – 
+Interpret the following values in integral columns as missing value:
+    * `"min"` min int32 or min int64 depending on the type of the column
+    * `"max"` max int32 or max int64 depending on the type of the column
+    * a special integer value that should be interpreted as missing value
+  * **row_ids** (_str_) – 
+Defines what RowID should be used. Must be one of the following values:
+    * `"keep"`: Use the first column of the table as RowID. The first column must be of type string.
+    * `"generate"`: Generate new RowIDs of the format `f"Row{i}"` where `i` is the position of the row (from `0` to `length-1`).
+    * `"auto"`: Use the first column of the table if it has the name “<RowID>” and is of type string or integer.
+      * If the “<RowID>” column is of type string, use it directly
+      * If the “<RowID>” column is of an integer type use `f"Row{n}` where `n` is the value of the integer column.
+      * Generate new RowIDs (`"generate"`) if the first column has another type or name.
+
+
+
+Returns:
+    
+The created Table instance. 
+
+Return type:
+    
+pyarrow.Table 
+
+insert(_other :_Columnar_, _at :int_) → _Columnar
+    
+Insert a column or another _Columnar object (e.g. Table, Schema) into the current _Columnar object at a specific position. 
+
+Parameters:
+    
+  * **other** (_Columnar or Column) – The column or _Columnar object to be inserted.
+  * **at** (_int_) – The index at which the insertion should occur.
+
+
+
+Returns:
+    
+The _Columnar object after the insertion. 
+
+Return type:
+    
+_Columnar 
+
+Raises:
+    
+**TypeError** – If other is not of type _Columnar or Column.
+Notes
+The insertion is done in-place, meaning the current _Columnar object is modified. 
+
+_abstract property_num_columns _: int_
+    
+Get the number of columns in the dataset. 
+
+remove(_slicing :str|int|List[str]_)
+    
+Implements remove method for Columnar data structures. The input can be a column index, a column name or a list of column names.
+If the input is a column index, the column with that index will be removed. If it is a column name, then the first column with matching name is removed. Passing a list of column names will filter out all (including duplicate) columns with matching names. 
+
+Parameters:
+    
+**slicing** (_int_ _|__list_ _|__str_) – Can be of type integer representing the index in column_names to remove. Or a list of strings removing every column matching from that list. Or a string of which first occurrence is removed from the column_names. 
+
+Returns:
+    
+**_ColumnarView** 
+
+Return type:
+    
+A View missing the columns to be removed. 
+
+Raises:
+    
+  * **ValueError** – If no matching column is found given a list or str.:
+  * **IndexError** – If column is accessed by integer and is out of bounds.:
+  * **TypeError** – If the key is neither an integer nor a string or list of strings.:
+
+
+
+_abstract property_schema _: Schema_
+    
+The schema of this table, containing column names, types, and potentially metadata 
+
+to_batches() → Iterator[Table]
+    
+Alias for Table.batches() 
+
+to_pandas(_sentinel :str|int|None=None_) → pandas.DataFrame
+    
+Access this table as a pandas.DataFrame. 
+
+Parameters:
+    
+**sentinel** (_str_ _or_ _int_) – 
+Replace missing values in integral columns by the given value. It can be one of the following:
+>   * `"min"` min int32 or min int64 depending on the type of the column
+>   * `"max"` max int32 or max int64 depending on the type of the column
+>   * An integer value that should be inserted for each missing value
+> 
+
+
+to_pyarrow(_sentinel :str|int|None=None_) → pyarrow.Table
+    
+Access this table as a pyarrow.Table. 
+
+Parameters:
+    
+**sentinel** (_str_ _or_ _int_) – 
+Replace missing values in integral columns by the given value, which can be one of the following:
+  * ”min”: minimum value of int32 or int64 depending on the type of the column
+  * ”max”: maximum value of int32 or int64 depending on the type of the column
+  * An integer value that should be inserted for each missing value
+
+
+
+_class_ knime.scripting.io.BatchOutputTable
+    
+An output table generated by combining smaller tables (also called batches).
+Notes
+  * All batches must have the same number, names and types of columns.
+  * All batches except the last batch must have the same number of rows.
+  * The last batch can have fewer rows than the other batches.
+  * This object does not provide means to continue to work with the data but is meant to be used as a return value of a Node’s execute() method.
+
+
+
+_abstract_ append(_batch :Table|pandas.DataFrame|pyarrow.Table|pyarrow.RecordBatch_) → None
+    
+Append a batch to this output table. The first batch defines the structure of the table, and all subsequent batches must have the same number of columns, column names and column types.
+Notes
+Keep in mind that the RowID will be handled according to the “row_ids” mode chosen in BatchOutputTable.create. 
+
+_static_ create(_row_ids :str='keep'_)
+    
+Create an empty BatchOutputTable 
+
+Parameters:
+    
+**row_ids** (_str_) – 
+Defines what RowID should be used. Must be one of the following values:
+  * ”keep”:
+>     * For appending DataFrames: Keep the DataFrame.index as the RowID. Convert the index to strings if necessary.
+>     * For appending Arrow tables or record batches: Use the first column of the table as RowID. The first column must be of type string.
+  * ”generate”: Generate new RowIDs of the format “Row{i}”
+
+
+
+_static_ from_batches(_generator_ , _row_ids :str='generate'_)
+    
+Create output table where each batch is provided by a generator 
+
+Parameters:
+    
+**row_ids** (_object_) – See BatchOutputTable.create. 
+
+_abstract property_num_batches _: int_
+    
+The number of batches written to this output table.
+## Views 
+
+knime.scripting.io.view(_obj_) → NodeView
+    
+Create an NodeView for the given object.
+This method tries to find out the best option to display the given object. First, the method checks if a special view implementation (listed below) exists for the given object. Next, IPython _repr_html_, _repr_svg_, _repr_png_, or _repr_jpeg_ are used.
+Special view implementations:
+  * HTML: The obj must be of type str and start with “<!DOCTYPE html>”. The document must be self-contained and must not reference external resources. Links to external resources will be opened in an external browser.
+  * SVG: The obj must be of type str and contain a valid SVG
+  * PNG: The obj must be of type bytes and contain a PNG image file
+  * JPEG: The obj must be of type bytes and contain a JPEG image file
+  * Matplotlib: The obj must be a matplotlib.figure.Figure
+  * Plotly: The obj must be a plotly.graph_objects.Figure
+
+
+
+Parameters:
+    
+**obj** (_Any_) – The object which should be displayed 
+
+Raises:
+    
+**ValueError** – If no view could be created for the given object 
+
+knime.scripting.io.view_matplotlib(_fig =None_, _format ='png'_) → NodeView
+    
+Create a view showing the given matplotlib figure.
+The figure is displayed by exporting it as an SVG. If no figure is given the current active figure is displayed. Note that the figure is closed and should not be used after calling this method. 
+
+Parameters:
+    
+  * **fig** (_matplotlib.figure.Figure_) – A matplotlib figure which should be displayed.
+  * **format** (_str_) – The format of the view inside the HTML document. Either “png” or “svg”.
+
+
+
+Raises:
+    
+  * **ImportError** – If matplotlib is not available.
+  * **TypeError** – If the figure is not a matplotlib figure.
+
+
+
+knime.scripting.io.view_seaborn() → NodeView
+    
+Create a view showing the current active seaborn figure.
+This function just calls view_matplotlib() because seaborn plots are just matplotlib figures under the hood. 
+
+Raises:
+    
+**ImportError** – If matplotlib is not available. 
+
+knime.scripting.io.view_plotly(_fig_) → NodeView
+    
+Create a view showing the given plotly figure.
+The figure is displayed by exporting it as an HTML document.
+To be able to synchronize the selection between the view and other KNIME views the customdata of the figure traces must be set to the RowID. 
+
+Parameters:
+    
+**fig** (_plotly.graph_objects.Figure_) – A plotly figure object which should be displayed. 
+
+Raises:
+    
+  * **ImportError** – If plotly is not available.
+  * **TypeError** – If the figure is not a plotly figure.
+
+
+Examples
+```
+>>> fig = px.scatter(df, x="my_x_col", y="my_y_col", color="my_label_col",
+...         custom_data=[df.index])
+... node_view = view_plotly(fig)
+
+```
+
+
+knime.scripting.io.view_html(_html :str_, _svg_or_png :str|bytes|None=None_, _render_fn :Callable[[],str|bytes]|None=None_) → NodeView
+    
+Create a NodeView that displays the given HTML document.
+The document must be self-contained and must not reference external resources. Links to external resources will be opened in an external browser. 
+
+Parameters:
+    
+  * **html** (_str_) – A string containing the HTML document.
+  * **svg_or_png** (_str_ _or_ _bytes_) – A rendered representation of the HTML page. Either a string containing an SVG or a bytes object containing a PNG image.
+  * **render_fn** (_callable_) – A callable that returns an SVG or PNG representation of the page.
+
+
+
+knime.scripting.io.view_svg(_svg :str_) → NodeView
+    
+Create a NodeView that displays the given SVG. 
+
+Parameters:
+    
+**svg** (_str_) – A string containing the SVG. 
+
+knime.scripting.io.view_png(_png :bytes_) → NodeView
+    
+Create a NodeView that displays the given PNG image. 
+
+Parameters:
+    
+**png** (_bytes_) – The bytes of the PNG image 
+
+knime.scripting.io.view_jpeg(_jpeg :bytes_) → NodeView
+    
+Create a NodeView that displays the given JPEG image. 
+
+Parameters:
+    
+**jpeg** (_bytes_) – The bytes of the JPEG image 
+
+knime.scripting.io.view_ipy_repr(_obj_) → NodeView
+    
+Create a NodeView by using the IPython _repr_*_ function of the object.
+Tries to use:
+  1. _repr_html_
+  2. _repr_svg_
+  3. _repr_png_
+  4. _repr_jpeg_
+
+
+in this order. 
+
+Parameters:
+    
+**obj** (_object_) – The object which should be displayed. 
+
+Raises:
+    
+**ValueError** – If no view could be created for the given object. 
+
+_class_ knime.scripting.io.NodeView(_html :str_, _svg_or_png :str|bytes|None=None_, _render_fn :Callable[[],str|bytes]|None=None_)
+    
+A view of a KNIME node that can be displayed for the user.
+Notes
+Do not create a NodeView directly but use the utility functions view, view_html, view_svg, view_png, and view_jpeg.
+## Utility functions 
+
+knime.scripting.io.get_workflow_temp_dir() → str
+    
+Returns the local absolute path where temporary files for this workflow should be stored. Files created in this folder are not automatically deleted by KNIME.
+By default, this folder is located in the operating system’s temporary folder. In that case, the contents will be cleaned by the OS. 
+
+knime.scripting.io.get_workflow_data_area_dir() → str
+    
+Returns the local absolute path to the current workflow’s data area folder. This folder is meant to be part of the workflow, so its contents are included whenever the workflow is shared.
+Previous Next 
+© Copyright 2021, KNIME GmbH.
+Built with Sphinx using a theme provided by Read the Docs. 
